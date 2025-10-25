@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libomp-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
