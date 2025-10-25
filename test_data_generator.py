@@ -1,50 +1,67 @@
 import pandas as pd
 import numpy as np
 
+
 def generate_sample_exoplanet_data(n_samples=100, seed=42):
     """
-    Generate sample exoplanet data for testing the app
+    Generate realistic synthetic exoplanet data for testing the Streamlit app.
+    Columns correspond to the model's feature set:
+    ['planet_radius', 'transit_depth', 'transit_duration', 'orbital_period',
+     'stellar_temp', 'stellar_radius', 'stellar_logg', 'snr', 'total_fp_flags']
     """
     np.random.seed(seed)
-    
-    # Generate realistic ranges based on actual exoplanet data
+
     data = {
-        'planet_radius': np.random.lognormal(1.5, 0.8, n_samples),  # Earth radii
-        'transit_depth': np.random.lognormal(7, 1.5, n_samples),    # ppm
-        'transit_duration': np.random.uniform(1, 8, n_samples),      # hours
-        'orbital_period': np.random.lognormal(1.5, 1.2, n_samples), # days
-        'eq_temperature': np.random.normal(1200, 600, n_samples),    # Kelvin
-        'stellar_temp': np.random.normal(5800, 1000, n_samples),     # Kelvin
-        'stellar_radius': np.random.lognormal(0, 0.3, n_samples),    # Solar radii
-        'logg': np.random.normal(4.4, 0.3, n_samples)                # log(cm/s²)
+        # Planetary features
+        "planet_radius": np.random.lognormal(
+            mean=1.2, sigma=0.6, size=n_samples
+        ),  # ~3–5 Earth radii typical median
+        "transit_depth": np.random.lognormal(
+            mean=7.0, sigma=1.2, size=n_samples
+        ),  # ~ppm scale
+        "transit_duration": np.random.uniform(0.5, 12.0, size=n_samples),  # hours
+        "orbital_period": np.random.lognormal(
+            mean=1.5, sigma=1.0, size=n_samples
+        ),  # days
+        # Stellar features
+        "stellar_temp": np.random.normal(
+            loc=5700, scale=800, size=n_samples
+        ),  # K (Sun-like)
+        "stellar_radius": np.random.lognormal(
+            mean=0.0, sigma=0.3, size=n_samples
+        ),  # solar radii
+        "stellar_logg": np.random.normal(loc=4.4, scale=0.2, size=n_samples),  # cgs
+        # Observation-related features
+        "snr": np.random.uniform(5, 100, size=n_samples),  # signal-to-noise ratio
+        "total_fp_flags": np.random.randint(
+            0, 4, size=n_samples
+        ),  # sum of false-positive flags
     }
-    
-    # Create DataFrame
+
     df = pd.DataFrame(data)
-    
-    # Ensure positive values where needed
-    df['planet_radius'] = df['planet_radius'].clip(lower=0.1)
-    df['transit_depth'] = df['transit_depth'].clip(lower=10)
-    df['orbital_period'] = df['orbital_period'].clip(lower=0.5)
-    df['eq_temperature'] = df['eq_temperature'].clip(lower=100)
-    df['stellar_temp'] = df['stellar_temp'].clip(lower=2800, upper=50000)
-    df['stellar_radius'] = df['stellar_radius'].clip(lower=0.1)
-    
-    # Add some object IDs for reference
-    df.insert(0, 'object_id', [f'TEST-{i:04d}' for i in range(n_samples)])
-    
+
+    # Clip to realistic physical limits
+    df["planet_radius"] = df["planet_radius"].clip(lower=0.5, upper=20)
+    df["transit_depth"] = df["transit_depth"].clip(lower=50, upper=50000)
+    df["orbital_period"] = df["orbital_period"].clip(lower=0.5, upper=500)
+    df["stellar_temp"] = df["stellar_temp"].clip(lower=3000, upper=10000)
+    df["stellar_radius"] = df["stellar_radius"].clip(lower=0.1, upper=10)
+    df["stellar_logg"] = df["stellar_logg"].clip(lower=3.5, upper=5.0)
+    df["snr"] = df["snr"].clip(lower=1, upper=200)
+
+    # Add synthetic IDs
+    df.insert(0, "object_id", [f"TEST-{i:04d}" for i in range(n_samples)])
+
     return df
 
-# Generate and save sample data
+
 if __name__ == "__main__":
-    # Generate test data
     test_data = generate_sample_exoplanet_data(n_samples=100)
-    
-    # Save to CSV
-    test_data.to_csv('test_exoplanet_data.csv', index=False)
+    test_data.to_csv("test_exoplanet_data.csv", index=False)
+
     print("✅ Test data generated: test_exoplanet_data.csv")
     print(f"\nShape: {test_data.shape}")
-    print(f"\nFirst few rows:")
+    print("\nFirst few rows:")
     print(test_data.head())
-    print(f"\nStatistics:")
+    print("\nStatistics:")
     print(test_data.describe())
