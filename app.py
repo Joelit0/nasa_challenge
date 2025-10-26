@@ -86,6 +86,8 @@ def prepare_data(df, feature_names):
     missing_features = set(feature_names) - set(df.columns)
     if missing_features:
         st.warning(f"Missing features: {missing_features}")
+        st.info(f"Available columns in your CSV: {list(df.columns)}")
+        st.info(f"Required features: {list(feature_names)}")
         return None
 
     X = df[feature_names].copy()
@@ -152,6 +154,12 @@ with tab1:
         try:
             df = pd.read_csv(uploaded_file)
 
+            # Initialize session state if not exists
+            if 'df_results' not in st.session_state:
+                st.session_state.df_results = None
+                st.session_state.df_original = None
+                st.session_state.file_name = None
+
             st.success(f"File loaded successfully. {len(df)} records found.")
 
             with st.expander("Preview Raw Data"):
@@ -199,185 +207,195 @@ with tab1:
                                 ]
                             ].max(axis=1)
 
+                            # Store results in session state
+                            st.session_state.df_results = df_results
+                            st.session_state.df_original = df
+                            st.session_state.file_name = uploaded_file.name
+
                             st.success("Classification completed successfully")
 
-                            # Metrics
-                            st.subheader("Results Summary")
-                            col1, col2, col3, col4 = st.columns(4)
+            # Display results if they exist in session state
+            if st.session_state.df_results is not None:
+                df_results = st.session_state.df_results
+                
+                # Calculate metrics
+                count_fp = sum(df_results["Classification"] == "False Positive")
+                count_cand = sum(df_results["Classification"] == "Candidate")
+                count_conf = sum(df_results["Classification"] == "Confirmed Exoplanet")
+                avg_confidence = df_results["Max_Probability"].mean()
 
-                            count_fp = sum(predictions == 0)
-                            count_cand = sum(predictions == 1)
-                            count_conf = sum(predictions == 2)
-                            avg_confidence = np.mean(
-                                [max(prob) for prob in probabilities]
+                # Metrics
+                st.subheader("Results Summary")
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric("Total Objects", len(df_results))
+                with col2:
+                    st.metric(
+                        "Confirmed Exoplanets",
+                        count_conf,
+                        delta=f"{count_conf / len(df_results) * 100:.1f}%",
+                    )
+                with col3:
+                    st.metric("Candidates", count_cand)
+                with col4:
+                    st.metric("False Positives", count_fp)
+
+                st.caption(f"Average confidence: {avg_confidence:.1%}")
+
+                # Results table
+                st.subheader("Classification Results")
+
+                # Filter options
+                col1, col2 = st.columns(2)
+                with col1:
+                    filter_option = st.selectbox(
+                        "Filter by classification:",
+                        [
+                            "All Objects",
+                            "Confirmed Exoplanets Only",
+                            "Candidates Only",
+                            "False Positives Only",
+                        ],
+                        key="filter_selectbox"
+                    )
+                with col2:
+                    confidence_threshold = st.slider(
+                        "Minimum confidence threshold:",
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.05,
+                        format="%.0f%%",
+                        key="confidence_slider"
+                    )
+
+                # Apply filters
+                df_filtered = df_results.copy()
+                if filter_option == "Confirmed Exoplanets Only":
+                    df_filtered = df_filtered[
+                        df_filtered["Classification"] == "Confirmed Exoplanet"
+                    ]
+                elif filter_option == "Candidates Only":
+                    df_filtered = df_filtered[
+                        df_filtered["Classification"] == "Candidate"
+                    ]
+                elif filter_option == "False Positives Only":
+                    df_filtered = df_filtered[
+                        df_filtered["Classification"] == "False Positive"
+                    ]
+
+                df_filtered = df_filtered[
+                    df_filtered["Max_Probability"] >= confidence_threshold
+                ]
+
+                st.dataframe(
+                    df_filtered.style.background_gradient(
+                        subset=["Max_Probability"], cmap="RdYlGn"
+                    ),
+                    use_container_width=True,
+                )
+
+                # Download results
+                csv = df_results.to_csv(index=False)
+                st.download_button(
+                    "Download Results (CSV)",
+                    csv,
+                    "exoplanet_predictions.csv",
+                    "text/csv",
+                    use_container_width=True,
+                    key="download_results"
+                )
+
+                st.markdown("---")
+
+                # Visualizations
+                st.subheader("Data Visualizations")
+
+                viz_col1, viz_col2 = st.columns(2)
+
+                with viz_col1:
+                    fig_pie = go.Figure(
+                        data=[
+                            go.Pie(
+                                labels=[
+                                    "Confirmed Exoplanet",
+                                    "Candidate",
+                                    "False Positive",
+                                ],
+                                values=[count_conf, count_cand, count_fp],
+                                hole=0.4,
+                                marker_colors=[
+                                    "#10b981",
+                                    "#3b82f6",
+                                    "#ef4444",
+                                ],
                             )
+                        ]
+                    )
+                    fig_pie.update_layout(
+                        title="Classification Distribution", height=400
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
 
-                            with col1:
-                                st.metric("Total Objects", len(df_results))
-                            with col2:
-                                st.metric(
-                                    "Confirmed Exoplanets",
-                                    count_conf,
-                                    delta=f"{count_conf / len(df_results) * 100:.1f}%",
-                                )
-                            with col3:
-                                st.metric("Candidates", count_cand)
-                            with col4:
-                                st.metric("False Positives", count_fp)
+                with viz_col2:
+                    fig_hist = px.histogram(
+                        df_results,
+                        x="Max_Probability",
+                        color="Classification",
+                        title="Confidence Distribution",
+                        labels={"Max_Probability": "Maximum Probability"},
+                        nbins=20,
+                        color_discrete_map={
+                            "Confirmed Exoplanet": "#10b981",
+                            "Candidate": "#3b82f6",
+                            "False Positive": "#ef4444",
+                        },
+                    )
+                    fig_hist.update_layout(height=400)
+                    st.plotly_chart(fig_hist, use_container_width=True)
 
-                            st.caption(f"Average confidence: {avg_confidence:.1%}")
+                # Feature relationships
+                st.subheader("Feature Analysis")
 
-                            # Results table
-                            st.subheader("Classification Results")
+                numeric_cols = [
+                    col
+                    for col in feature_names
+                    if col in df_results.columns
+                ]
 
-                            # Filter options
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                filter_option = st.selectbox(
-                                    "Filter by classification:",
-                                    [
-                                        "All Objects",
-                                        "Confirmed Exoplanets Only",
-                                        "Candidates Only",
-                                        "False Positives Only",
-                                    ],
-                                )
-                            with col2:
-                                confidence_threshold = st.slider(
-                                    "Minimum confidence threshold:",
-                                    0.0,
-                                    1.0,
-                                    0.0,
-                                    0.05,
-                                    format="%.0f%%",
-                                )
+                if len(numeric_cols) >= 2:
+                    col1, col2 = st.columns(2)
 
-                            # Apply filters
-                            df_filtered = df_results.copy()
-                            if filter_option == "Confirmed Exoplanets Only":
-                                df_filtered = df_filtered[
-                                    df_filtered["Classification"]
-                                    == "Confirmed Exoplanet"
-                                ]
-                            elif filter_option == "Candidates Only":
-                                df_filtered = df_filtered[
-                                    df_filtered["Classification"] == "Candidate"
-                                ]
-                            elif filter_option == "False Positives Only":
-                                df_filtered = df_filtered[
-                                    df_filtered["Classification"] == "False Positive"
-                                ]
+                    with col1:
+                        x_axis = st.selectbox(
+                            "X-axis feature:", numeric_cols, index=0,
+                            key="x_axis_selectbox"
+                        )
+                    with col2:
+                        y_axis = st.selectbox(
+                            "Y-axis feature:",
+                            numeric_cols,
+                            index=1 if len(numeric_cols) > 1 else 0,
+                            key="y_axis_selectbox"
+                        )
 
-                            df_filtered = df_filtered[
-                                df_filtered["Max_Probability"] >= confidence_threshold
-                            ]
-
-                            st.dataframe(
-                                df_filtered.style.background_gradient(
-                                    subset=["Max_Probability"], cmap="RdYlGn"
-                                ),
-                                use_container_width=True,
-                            )
-
-                            # Download results
-                            csv = df_results.to_csv(index=False)
-                            st.download_button(
-                                "Download Results (CSV)",
-                                csv,
-                                "exoplanet_predictions.csv",
-                                "text/csv",
-                                use_container_width=True,
-                            )
-
-                            st.markdown("---")
-
-                            # Visualizations
-                            st.subheader("Data Visualizations")
-
-                            viz_col1, viz_col2 = st.columns(2)
-
-                            with viz_col1:
-                                fig_pie = go.Figure(
-                                    data=[
-                                        go.Pie(
-                                            labels=[
-                                                "Confirmed Exoplanet",
-                                                "Candidate",
-                                                "False Positive",
-                                            ],
-                                            values=[count_conf, count_cand, count_fp],
-                                            hole=0.4,
-                                            marker_colors=[
-                                                "#10b981",  # Green for confirmed
-                                                "#3b82f6",  # Blue for candidate
-                                                "#ef4444",  # Red for false positive
-                                            ],
-                                        )
-                                    ]
-                                )
-                                fig_pie.update_layout(
-                                    title="Classification Distribution", height=400
-                                )
-                                st.plotly_chart(fig_pie, use_container_width=True)
-
-                            with viz_col2:
-                                # Confidence distribution - CORREGIDO
-                                # Use Max_Probability instead of Probability_Exoplanet
-                                fig_hist = px.histogram(
-                                    df_results,
-                                    x="Max_Probability",
-                                    color="Classification",
-                                    title="Confidence Distribution",
-                                    labels={"Max_Probability": "Maximum Probability"},
-                                    nbins=20,
-                                    color_discrete_map={
-                                        "Confirmed Exoplanet": "#10b981",
-                                        "Candidate": "#3b82f6",
-                                        "False Positive": "#ef4444",
-                                    },
-                                )
-                                fig_hist.update_layout(height=400)
-                                st.plotly_chart(fig_hist, use_container_width=True)
-
-                            # Feature relationships
-                            st.subheader("Feature Analysis")
-
-                            numeric_cols = [
-                                col
-                                for col in feature_names
-                                if col in df_results.columns
-                            ]
-
-                            if len(numeric_cols) >= 2:
-                                col1, col2 = st.columns(2)
-
-                                with col1:
-                                    x_axis = st.selectbox(
-                                        "X-axis feature:", numeric_cols, index=0
-                                    )
-                                with col2:
-                                    y_axis = st.selectbox(
-                                        "Y-axis feature:",
-                                        numeric_cols,
-                                        index=1 if len(numeric_cols) > 1 else 0,
-                                    )
-
-                                fig_scatter = px.scatter(
-                                    df_results,
-                                    x=x_axis,
-                                    y=y_axis,
-                                    color="Classification",
-                                    size="Max_Probability",
-                                    hover_data=numeric_cols[:5],
-                                    title=f"{x_axis.replace('_', ' ').title()} vs {y_axis.replace('_', ' ').title()}",
-                                    color_discrete_map={
-                                        "Confirmed Exoplanet": "#10b981",
-                                        "Candidate": "#3b82f6",
-                                        "False Positive": "#ef4444",
-                                    },
-                                )
-                                fig_scatter.update_layout(height=500)
-                                st.plotly_chart(fig_scatter, use_container_width=True)
+                    fig_scatter = px.scatter(
+                        df_results,
+                        x=x_axis,
+                        y=y_axis,
+                        color="Classification",
+                        size="Max_Probability",
+                        hover_data=numeric_cols[:5],
+                        title=f"{x_axis.replace('_', ' ').title()} vs {y_axis.replace('_', ' ').title()}",
+                        color_discrete_map={
+                            "Confirmed Exoplanet": "#10b981",
+                            "Candidate": "#3b82f6",
+                            "False Positive": "#ef4444",
+                        },
+                    )
+                    fig_scatter.update_layout(height=500)
+                    st.plotly_chart(fig_scatter, use_container_width=True)
 
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
