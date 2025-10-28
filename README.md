@@ -6,6 +6,19 @@ Aplicación web de clasificación de exoplanetas desarrollada con Streamlit. Uti
 
 Este proyecto implementa un modelo de aprendizaje automático para clasificar objetos astronómicos como exoplanetas confirmados, candidatos o falsos positivos. El sistema fue entrenado con datos validados del Archivo de Exoplanetas de NASA.
 
+## Video Demostracion
+
+Mira el video de demostración del sistema de clasificación de exoplanetas:
+
+https://github.com/user-attachments/assets/your-video-id-here.mp4
+
+<video width="100%" controls>
+  <source src="https://github.com/user-attachments/assets/your-video-id-here.mp4" type="video/mp4">
+  Tu navegador no soporta el elemento de video.
+</video>
+
+*Para agregar tu video: Sube tu video a GitHub (arrastrando y soltando en este archivo) o proporciona un enlace a un video de YouTube, Vimeo u otro servicio de hosting.*
+
 ## Caracteristicas
 
 - Clasificacion automatica de exoplanetas mediante modelo XGBoost
