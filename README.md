@@ -6,7 +6,10 @@ Aplicación web de clasificación de exoplanetas desarrollada con Streamlit. Uti
 
 Este proyecto implementa un modelo de aprendizaje automático para clasificar objetos astronómicos como exoplanetas confirmados, candidatos o falsos positivos. El sistema fue entrenado con datos validados del Archivo de Exoplanetas de NASA.
 
-[Demo](media/demo.mp4)
+<video controls width="600">
+    <source src="media/demo.mp4" type="video/mp4">
+    Your browser does not support embedded video
+</video>
 
 ## Caracteristicas
 
